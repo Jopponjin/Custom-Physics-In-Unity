@@ -1,0 +1,131 @@
+﻿using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace FutureGames.GamePhysics
+{
+    public class MonoPhysicalSphere : MonoBehaviour
+    {
+        [SerializeField]
+        MonoPlane plane = null;
+        [Space]
+
+        [SerializeField]
+        Vector3 velocity = Vector3.zero;
+        public Vector3 Velocity { get => velocity; set => velocity = value; }
+        public float mass = 1f;
+        [Space]
+
+        [SerializeField]
+        bool useGravity = false;
+        public bool isVerlet = false;
+        public bool onPlane = false;
+
+        [Space]
+        [SerializeField]
+        float chocEnergyDissipation = 0.05f;
+        public float Radius => transform.localScale.x * 0.5f;
+        
+        
+
+        private void Start()
+        {
+            var planes = GameObject.FindGameObjectsWithTag("MonoPlane");
+
+            plane  = planes[0].GetComponent<MonoPlane>();
+        }
+
+        private void Update()
+        {
+            ApplyForce(new Vector3(0f, 0f, 0f));
+
+            Vector3 hitPoint = plane.Projection(this);
+            bool isColliding = plane.IsColliding(this);
+
+            Debug.DrawLine(transform.position, hitPoint, isColliding ? Color.red : Color.blue);
+
+            //CorrectPosition(isColliding, hitPoint);
+
+            if(onPlane)
+                plane.Choc(this, chocEnergyDissipation);
+        }
+        
+
+
+
+        /// <summary>
+        /// Euler integration
+        /// </summary>
+        /// <param name="force"></param>
+        public void ApplyForce(Vector3 force)
+        {
+            Vector3 totalForce = useGravity ? force + mass * Physics.gravity : force;
+
+            // f = m * a
+            // a = f / m
+            Vector3 acc = totalForce / mass;
+
+            Integrate(acc, isVerlet);
+        }
+
+        void Integrate(Vector3 acc, bool isVerlet = false)
+        {
+            if (isVerlet == false) // use Euler
+            {
+                // v1 = v0 + a*detaTime
+                velocity = velocity + acc * Time.deltaTime;
+
+                // p1 = p0 + v*deltatime
+                transform.position = transform.position + velocity * Time.deltaTime;
+            }
+            else // use Verlet
+            {
+                transform.position +=
+                    velocity * Time.deltaTime +
+                    acc * Time.deltaTime * Time.deltaTime * 0.5f;
+
+                velocity += acc * Time.deltaTime * 0.5f; // ??
+            }
+        }
+
+        /// <summary>
+        /// Assuming the initial velocity is 0
+        /// </summary>
+        /// <returns></returns>
+        public float VelocityOnGround()
+        {
+            return Mathf.Sqrt(2f * Physics.gravity.magnitude * (transform.position.y - plane.transform.position.y));
+        }
+
+        public float ErrorVelocityOnTheGround()
+        {
+            return Mathf.Abs(velocity.magnitude - VelocityOnGround());
+        }
+
+        private void OnTriggerEnter(Collider other)
+        {
+            UpdateOnPlaneWhenEnter(other);
+        }
+
+        private void UpdateOnPlaneWhenEnter(Collider other)
+        {
+            MonoPlane plane = other.GetComponent<MonoPlane>();
+            if (plane == null)
+                onPlane = false;
+            else
+                onPlane = true;
+        }
+
+        private void OnTriggerExit(Collider other)
+        {
+            UpdateOnPlaneWhenExit(other);
+        }
+
+        private void UpdateOnPlaneWhenExit(Collider other)
+        {
+            MonoPlane plane = other.GetComponent<MonoPlane>();
+            if (plane != null)
+                onPlane = false;
+        }
+    }
+}
